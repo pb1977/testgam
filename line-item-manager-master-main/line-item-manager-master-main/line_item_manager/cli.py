@@ -24,7 +24,7 @@ logger = config.getLogger(__name__)
 # ==========================================================
 # 🌳 THE TRUNK: The main "Group" command
 # ==========================================================
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True)  # @click.group(...) makes cli the top-level command group, like: line_item_manager create, invoke_without_command=True means: If the user runs just line_item_manager with no subcommand, Click still calls cli().
 @click.option('--version', is_flag=True, help='Print version information and exit.')
 @click.pass_context # <--- Gives this function a "Passport" (ctx) to see its own subcommands
 def cli(ctx: click.core.Context, version: bool) -> None:
@@ -38,7 +38,7 @@ def cli(ctx: click.core.Context, version: bool) -> None:
 # ==========================================================
 # 🚀 THE 'CREATE' BRANCH: This does the heavy lifting
 # ==========================================================
-@cli.command()
+@cli.command() # this creates a subcommand to cli
 # 📄 Required: The YAML file with your ad settings
 @click.argument('configfile', type=click.Path(exists=True))
 # 🏢 Optional: Network settings (can also be inside the YAML)
@@ -105,24 +105,36 @@ def create(ctx: click.core.Context, configfile: str, **kwargs):
 
     # 6️⃣ PRE-CREATE: Calculate dates and expand price buckets
     try:
-        config.pre_create()
+        PrebidBidder.validate_override_map(config.user.get('bidder_key_map'))
     except ValueError as e:
         raise click.UsageError(f'{e}', ctx=ctx)
 
     # 7️⃣ EXECUTION: Talk to the Google API and build the items
+    # pre-create line items config
+    try:
+        config.pre_create()
+    except ValueError as e:
+        raise click.UsageError(f'{e}', ctx=ctx)
+
+    # create line items
     try:
         gam.create_line_items()
         gam.success = True
-    except (ResourceNotActive, ResourceNotFound, GoogleAdsError) as _e:
-        logger.error('Failed to create resources: %s', _e)
+    except ResourceNotActive as _e:
+        logger.error('Resource is not active:\n  - %s', _e)
+    except ResourceNotFound as _e:
+        logger.error('Not able to find the following resource:\n  - %s', _e)
+    except GoogleAdsError as _e:
+        logger.error('Google Ads Error, %s', _e)
+    except ValueError as _e:
+        logger.error('Unexpected result, %s', _e)
     except KeyboardInterrupt:
-        logger.warning('User stopped the script.')
+        logger.warning('User Interrupt')
     finally:
-        # 🧹 CLEANUP: If things broke, archive the messy half-finished orders
         try:
             gam.cleanup()
         except GoogleAdsError as _e:
-            logger.error('Cleanup failed: %s', _e)
+            logger.error('Cleanup: Google Ads Error, %s', _e)
 
 # ==========================================================
 # 🔍 THE 'SHOW' BRANCH: Peek at internal default files
@@ -136,16 +148,20 @@ def show_resource(filename: str) -> None:
 @cli.command()
 @click.argument('resource', type=click.Choice(['config', 'bidders', 'template', 'settings', 'schema']))
 def show(resource: str) -> None:
-    """Show internal resources for reference."""
+    """Show resources"""
     if resource == 'config':
         show_resource('conf.d/line_item_manager.yml')
-    elif resource == 'bidders':
-        # Lists all Prebid bidders the tool knows about
+    if resource == 'template':
+        show_resource('conf.d/line_item_template.yml')
+    if resource == 'settings':
+        show_resource('conf.d/settings.yml')
+    if resource == 'schema':
+        show_resource('conf.d/schema.yml')
+    if resource == 'bidders':
         print("%-25s%s" % ('Code', 'Name'))
+        print("%-25s%s" % ('----', '----'))
         for row in sorted(prebid.bidders.values(), key=lambda x: x['bidder-code']):
             print("%-25s%s" % (row['bidder-code'], row['bidder-name']))
-    else:
-        show_resource(f'conf.d/{resource}.yml')
 
 # ==========================================================
 # 🚦 ENTRY POINT: Where Python starts the engine
