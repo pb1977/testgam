@@ -89,6 +89,20 @@ Bundle the Streamlit UI as a single executable:
 
 The executable is available at dist/line-item-manager-ui.exe.
 
+Prebuilt .exe (GitHub Actions)
+------------------------------
+
+To download a prebuilt executable:
+:::
+
+   1. Open the GitHub Actions tab and select "Build Windows EXE".
+   2. Run the workflow or open the latest run.
+   3. Download the "line-item-manager-ui" artifact zip and extract
+      line-item-manager-ui.exe.
+
+When you publish a GitHub Release, the workflow also attaches
+line-item-manager-ui.exe as a release asset.
+
 Advanced Features
 -----------------
 
