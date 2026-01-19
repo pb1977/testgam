@@ -61,6 +61,34 @@ Example Workflow
    --bidder-code rubicon \
    --bidder-code ix
 
+Streamlit App
+-------------
+
+Run line-item-manager without the CLI using Streamlit:
+:::
+
+   $ pip install .[streamlit]
+   $ streamlit run -m line_item_manager.streamlit_app
+
+To launch without the Streamlit CLI (useful for packaging):
+:::
+
+   $ python -m line_item_manager.streamlit_launcher
+
+Building a Windows .exe
+-----------------------
+
+Bundle the Streamlit UI as a single executable:
+:::
+
+   $ pip install pyinstaller
+   $ pyinstaller --onefile --name line-item-manager-ui \
+   --collect-data line_item_manager \
+   --collect-all streamlit \
+   line_item_manager/streamlit_launcher.py
+
+The executable is available at dist/line-item-manager-ui.exe.
+
 Advanced Features
 -----------------
 
