@@ -1,25 +1,14 @@
 """Console script for line_item_manager."""
 from functools import partial
-import json
-import pkg_resources
 import sys
 
 import click
-from googleads.errors import GoogleAdsError
-import yaml
 
 from . import version as VERSION
-from .config import config
-from .exceptions import ResourceNotActive, ResourceNotFound
-from .gam_config import GAMConfig
-from .gam_operations import client as gam_client
-from .prebid import prebid, PrebidBidder
-from .validate import Validator
+from .app_runner import CreateOptions, LineItemManagerUsageError, create_line_items, list_bidders, read_resource
 
 # 🛠️ GLOBAL TWEAK: This makes the help menu automatically show default values for all options.
 click.option = partial(click.option, show_default=True)
-
-logger = config.getLogger(__name__)
 
 # ==========================================================
 # 🌳 THE TRUNK: The main "Group" command
@@ -64,104 +53,42 @@ def cli(ctx: click.core.Context, version: bool) -> None:
 @click.pass_context
 def create(ctx: click.core.Context, configfile: str, **kwargs):
     """Create line items"""
-    # 📥 DATA HANDOFF: Move all terminal flags into our central Config "Brain"
-    config.cli = kwargs
-
-    # 1️⃣ LOAD YAML: Parse your settings file
     try:
-        config.set_user_configfile(configfile)
-    except yaml.YAMLError as e:
-        raise click.UsageError(f'Check your configfile. {e}', ctx=ctx)
-
-    gam = GAMConfig()
-
-    # 2️⃣ LOGIC CHECK: Ensure user didn't pick conflicting options
-    if not kwargs['single_order'] and not kwargs['bidder_code']:
-        raise click.UsageError('You must use --single-order or provide at least one --bidder-code', ctx=ctx)
-
-    if kwargs['single_order'] and kwargs['bidder_code']:
-        raise click.UsageError('Use of --single-order and --bidder-code is not allowed.', ctx=ctx)
-
-    # 3️⃣ LOGIN CHECK: Try to connect to Google
-    config.set_client_factory(gam_client)
-    try:
-        config.client # This triggers the JSON key read and OAuth login
-    except Exception:
-        raise click.UsageError('Check your private key file. Access failed.', ctx=ctx)
-
-    # 4️⃣ NETWORK CHECK: Does the ID you gave match the name Google has?
-    try:
-        if not gam.network['displayName'] == config.network_name:
-            raise click.UsageError(f"Network name mismatch!", ctx=ctx)
-    except GoogleAdsError as _e:
-        logger.error(f'GoogleAdsError, {_e}')
-        raise click.UsageError('Access denied to Google account.', ctx=ctx)
-
-    # 5️⃣ SCHEMA CHECK: Does your YAML follow the required structure rules?
-    user_cfg = Validator(config.schema, config.user)
-    if not user_cfg.is_valid():
-        err_str = '\n'.join([f'  - {user_cfg.fmt(_e)}' for _e in user_cfg.errors()])
-        raise click.UsageError(f'Validation errors:\n{err_str}', ctx=ctx)
-
-    # 6️⃣ PRE-CREATE: Calculate dates and expand price buckets
-    try:
-        PrebidBidder.validate_override_map(config.user.get('bidder_key_map'))
-    except ValueError as e:
-        raise click.UsageError(f'{e}', ctx=ctx)
-
-    # 7️⃣ EXECUTION: Talk to the Google API and build the items
-    # pre-create line items config
-    try:
-        config.pre_create()
-    except ValueError as e:
-        raise click.UsageError(f'{e}', ctx=ctx)
-
-    # create line items
-    try:
-        gam.create_line_items()
-        gam.success = True
-    except ResourceNotActive as _e:
-        logger.error('Resource is not active:\n  - %s', _e)
-    except ResourceNotFound as _e:
-        logger.error('Not able to find the following resource:\n  - %s', _e)
-    except GoogleAdsError as _e:
-        logger.error('Google Ads Error, %s', _e)
-    except ValueError as _e:
-        logger.error('Unexpected result, %s', _e)
-    except KeyboardInterrupt:
-        logger.warning('User Interrupt')
-    finally:
-        try:
-            gam.cleanup()
-        except GoogleAdsError as _e:
-            logger.error('Cleanup: Google Ads Error, %s', _e)
+        create_line_items(
+            CreateOptions(
+                configfile=configfile,
+                network_code=kwargs.get("network_code"),
+                network_name=kwargs.get("network_name"),
+                private_key_file=kwargs.get("private_key_file"),
+                template=kwargs.get("template"),
+                settings=kwargs.get("settings"),
+                schema=kwargs.get("schema"),
+                single_order=kwargs.get("single_order", False),
+                bidder_codes=kwargs.get("bidder_code"),
+                test_run=kwargs.get("test_run", False),
+                dry_run=kwargs.get("dry_run", False),
+                quiet=kwargs.get("quiet", False),
+                verbose=kwargs.get("verbose"),
+                skip_auto_archive=kwargs.get("skip_auto_archive", False),
+            )
+        )
+    except LineItemManagerUsageError as exc:
+        raise click.UsageError(str(exc), ctx=ctx)
 
 # ==========================================================
 # 🔍 THE 'SHOW' BRANCH: Peek at internal default files
 # ==========================================================
-def show_resource(filename: str) -> None:
-    """Helper to find and print files hidden inside the package."""
-    rsrc_name = pkg_resources.resource_filename('line_item_manager', filename)
-    with open(rsrc_name) as fp:
-        print(fp.read())
-
 @cli.command()
 @click.argument('resource', type=click.Choice(['config', 'bidders', 'template', 'settings', 'schema']))
 def show(resource: str) -> None:
     """Show resources"""
-    if resource == 'config':
-        show_resource('conf.d/line_item_manager.yml')
-    if resource == 'template':
-        show_resource('conf.d/line_item_template.yml')
-    if resource == 'settings':
-        show_resource('conf.d/settings.yml')
-    if resource == 'schema':
-        show_resource('conf.d/schema.yml')
     if resource == 'bidders':
         print("%-25s%s" % ('Code', 'Name'))
         print("%-25s%s" % ('----', '----'))
-        for row in sorted(prebid.bidders.values(), key=lambda x: x['bidder-code']):
+        for row in list_bidders():
             print("%-25s%s" % (row['bidder-code'], row['bidder-name']))
+        return
+    print(read_resource(resource))
 
 # ==========================================================
 # 🚦 ENTRY POINT: Where Python starts the engine
