@@ -61,6 +61,48 @@ Example Workflow
    --bidder-code rubicon \
    --bidder-code ix
 
+Streamlit App
+-------------
+
+Run line-item-manager without the CLI using Streamlit:
+:::
+
+   $ pip install .[streamlit]
+   $ streamlit run -m line_item_manager.streamlit_app
+
+To launch without the Streamlit CLI (useful for packaging):
+:::
+
+   $ python -m line_item_manager.streamlit_launcher
+
+Building a Windows .exe
+-----------------------
+
+Bundle the Streamlit UI as a single executable:
+:::
+
+   $ pip install pyinstaller
+   $ pyinstaller --onefile --name line-item-manager-ui \
+   --collect-data line_item_manager \
+   --collect-all streamlit \
+   line_item_manager/streamlit_launcher.py
+
+The executable is available at dist/line-item-manager-ui.exe.
+
+Prebuilt .exe (GitHub Actions)
+------------------------------
+
+To download a prebuilt executable:
+:::
+
+   1. Open the GitHub Actions tab and select "Build Windows EXE".
+   2. Run the workflow or open the latest run.
+   3. Download the "line-item-manager-ui" artifact zip and extract
+      line-item-manager-ui.exe.
+
+When you publish a GitHub Release, the workflow also attaches
+line-item-manager-ui.exe as a release asset.
+
 Advanced Features
 -----------------
 

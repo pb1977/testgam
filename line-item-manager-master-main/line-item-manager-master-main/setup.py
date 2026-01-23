@@ -22,6 +22,10 @@ requirements = [
     'tqdm==4.56.0',
 ]
 
+streamlit_requirements = [
+    'streamlit',
+]
+
 package_data = [
     'conf.d/*.yml',
     'conf.d/*.yaml',
@@ -66,6 +70,7 @@ setup(
     extras_require={
         'release': release_requirements,
         'test': test_requirements,
+        'streamlit': streamlit_requirements,
     },
     install_requires=requirements,
     license="Apache Software License 2.0",
